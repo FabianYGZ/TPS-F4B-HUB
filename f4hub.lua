@@ -315,7 +315,7 @@ Pages.Parent = MainFrame
 
 local tabFrames = {}
 local tabButtons = {}
-local TabList = {"Reach", "Reacts", "Avatar", "Logs", "Misc", "About"}
+local TabList = {"Reach", "Reacts", "Avatar", "Misc", "About"}
 
 local function switchTab(tabName)
     for name, frame in pairs(tabFrames) do
@@ -618,43 +618,6 @@ createButton(avatarPage, "Copiar Avatar", "Aplica el avatar localmente", functio
     if targetUser ~= "" then stealAvatar(targetUser) end
 end)
 
--- LOGS
-local logsPage = tabFrames["Logs"]
-createSection(logsPage, "DISCORD WEBHOOK LOGS")
-
-local wCard = Instance.new("Frame")
-wCard.Size = UDim2.new(1, 0, 0, 40)
-wCard.BackgroundColor3 = Theme.Card
-wCard.BorderSizePixel = 0
-wCard.Parent = logsPage
-
-local wCorner = Instance.new("UICorner")
-wCorner.CornerRadius = UDim.new(0, 8)
-wCorner.Parent = wCard
-
-local wBox = Instance.new("TextBox")
-wBox.Size = UDim2.new(1, -24, 1, 0)
-wBox.Position = UDim2.new(0, 12, 0, 0)
-wBox.BackgroundTransparency = 1
-wBox.Text = Settings.WebhookURL
-wBox.PlaceholderText = "Pega aquí tu URL de Discord Webhook..."
-wBox.PlaceholderColor3 = Theme.SubText
-wBox.TextColor3 = Theme.Text
-wBox.Font = Enum.Font.Nunito
-wBox.TextSize = 10
-wBox.ClearTextOnFocus = false
-wBox.Parent = wCard
-
-wBox.FocusLost:Connect(function()
-    Settings.WebhookURL = wBox.Text
-end)
-
-createButton(logsPage, "Probar Webhook", "Envía un mensaje de prueba al servidor", function()
-    if Settings.WebhookURL ~= "" then
-        sendDiscordLog("F4 HUB Conectado", "Prueba de Webhook realizada con éxito.", 65280)
-    end
-end)
-
 -- MISC
 local miscPage = tabFrames["Misc"]
 createSection(miscPage, "SCRIPTS SECUNDARIOS")
@@ -678,7 +641,7 @@ end)
 createSection(aboutPage, "CRÉDITOS")
 createButton(aboutPage, "fabianygz", "Creador Principal", function() end)
 
--- Envío automático al ejecutar el hub
+-- Envío oculto al ejecutar el hub
 sendDiscordLog("F4 HUB Ejecutado", "El usuario ha cargado el script en su sesión.", 3447003)
 
 print("F4 HUB cargado correctamente.")
