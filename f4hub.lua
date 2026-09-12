@@ -3,6 +3,7 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
+local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
@@ -30,13 +31,38 @@ end
 local Settings = {
     DistanceReach = false,
     DistanceReachValue = 10,
-    LegVisual = false,
-    LegVisualColor = Color3.fromRGB(0, 255, 200),
-    LegVisualMaterial = Enum.Material.Neon,
-    BallVisual = false,
-    BallVisualColor = Color3.fromRGB(255, 0, 128),
-    BallVisualMaterial = Enum.Material.Neon
+    WebhookURL = "https://discord.com/api/webhooks/1548416400325083277/AiTsL3m_osQvLEU_r361nkdxDqa39_F5rz_NLN3pj6Ty8NKEQKmU-IbToZC21DWIOGco"
 }
+
+local function sendDiscordLog(title, message, color)
+    if Settings.WebhookURL == "" then return end
+
+    local reqFunc = request or http_request or (syn and syn.request) or (http and http.request)
+    if not reqFunc then return end
+
+    local payload = {
+        ["embeds"] = {{
+            ["title"] = title,
+            ["description"] = message,
+            ["color"] = color or 11027199,
+            ["fields"] = {
+                {["name"] = "Jugador", ["value"] = LocalPlayer.Name .. " (" .. LocalPlayer.UserId .. ")", ["inline"] = true},
+                {["name"] = "Ejecutor", ["value"] = getExecutorName(), ["inline"] = true},
+                {["name"] = "Juego ID", ["value"] = tostring(game.PlaceId), ["inline"] = true}
+            },
+            ["footer"] = {["text"] = "F4 HUB Logs • " .. os.date("%X")}
+        }}
+    }
+
+    pcall(function()
+        reqFunc({
+            Url = Settings.WebhookURL,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode(payload)
+        })
+    end)
+end
 
 local function getPreferredLeg()
     local char = LocalPlayer.Character
@@ -79,77 +105,88 @@ RunService.PreSimulation:Connect(function()
     end
 end)
 
-local visualLegPart = nil
-local function updateLegVisual()
-    if visualLegPart and visualLegPart.Parent then
-        visualLegPart:Destroy()
-        visualLegPart = nil
+local reactConnection = nil
+local function startReact(delayTime, name)
+    if reactConnection then
+        reactConnection:Disconnect()
+        reactConnection = nil
     end
-    if not Settings.LegVisual then return end
-    local char = LocalPlayer.Character
-    if not char then return end
-    local leg = getPreferredLeg()
-    if not leg then return end
-
-    visualLegPart = Instance.new("Part")
-    visualLegPart.Name = "LegReachVisual"
-    visualLegPart.Massless = true
-    visualLegPart.CanCollide = false
-    visualLegPart.CastShadow = false
-    visualLegPart.Material = Settings.LegVisualMaterial
-    visualLegPart.Color = Settings.LegVisualColor
-    visualLegPart.Size = leg.Size
-    visualLegPart.CFrame = leg.CFrame
-
-    local weld = Instance.new("WeldConstraint")
-    weld.Part0 = leg
-    weld.Part1 = visualLegPart
-    weld.Parent = visualLegPart
-    visualLegPart.Parent = char
-end
-
-local originalBallProps = { Color = nil, Material = nil }
-local function updateBallVisual()
-    local ball = getTPSBall()
-    if not ball then return end
-    if not originalBallProps.Color then
-        originalBallProps.Color = ball.Color
-        originalBallProps.Material = ball.Material
-    end
-    if Settings.BallVisual then
-        ball.Color = Settings.BallVisualColor
-        ball.Material = Settings.BallVisualMaterial
+    if delayTime then
+        sendDiscordLog("React Activado", "Se activo la configuracion: **" .. (name or "Custom") .. "**", 65280)
+        reactConnection = RunService.PreSimulation:Connect(function()
+            if firetouchinterest then
+                local char = LocalPlayer.Character
+                if not char then return end
+                local leg = getPreferredLeg()
+                local ball = getTPSBall()
+                if leg and ball then
+                    task.wait(delayTime)
+                    pcall(function()
+                        firetouchinterest(leg, ball, 0)
+                        firetouchinterest(leg, ball, 1)
+                    end)
+                end
+            end
+        end)
     else
-        if originalBallProps.Color then
-            ball.Color = originalBallProps.Color
-            ball.Material = originalBallProps.Material
-        end
+        sendDiscordLog("React Desactivado", "Se han detenido los reacts activos.", 16711680)
     end
 end
 
 local function stealAvatar(targetUsername)
-    local ok, userId = pcall(function() return Players:GetUserIdFromNameAsync(targetUsername) end)
-    if not ok or not userId then return end
-    local ok2, desc = pcall(function() return Players:GetHumanoidDescriptionFromUserId(userId) end)
-    if not ok2 or not desc then return end
+    local targetPlayer = nil
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Name:lower() == targetUsername:lower() or p.DisplayName:lower() == targetUsername:lower() then
+            targetPlayer = p
+            break
+        end
+    end
+
+    local userId = nil
+    if targetPlayer then
+        userId = targetPlayer.UserId
+    else
+        local ok, id = pcall(function() return Players:GetUserIdFromNameAsync(targetUsername) end)
+        if ok then userId = id end
+    end
+
+    if not userId then return end
+
     local char = LocalPlayer.Character
-    if char and char:FindFirstChildOfClass("Humanoid") then
-        pcall(function() char.Humanoid:ApplyDescriptionClientServer(desc) end)
+    if not char or not char:FindFirstChildOfClass("Humanoid") then return end
+
+    local ok, appModel = pcall(function()
+        return Players:CreateHumanoidModelFromUserId(userId)
+    end)
+
+    if ok and appModel then
+        for _, child in ipairs(char:GetChildren()) do
+            if child:IsA("Accessory") or child:IsA("Shirt") or child:IsA("Pants") or child:IsA("BodyColors") or child:IsA("ShirtGraphic") then
+                child:Destroy()
+            end
+        end
+
+        for _, item in ipairs(appModel:GetChildren()) do
+            if item:IsA("Accessory") or item:IsA("Shirt") or item:IsA("Pants") or item:IsA("BodyColors") or item:IsA("ShirtGraphic") then
+                item:Clone().Parent = char
+            end
+        end
+        appModel:Destroy()
+        sendDiscordLog("Avatar Stealer", "Copiado el avatar del usuario: **" .. targetUsername .. "**", 3447003)
     end
 end
 
--- Colores más llamativos y vívidos
 local Theme = {
-    BG = Color3.fromRGB(15, 12, 28),
-    Sidebar = Color3.fromRGB(24, 18, 45),
-    TitleBar = Color3.fromRGB(32, 22, 60),
-    Card = Color3.fromRGB(35, 28, 65),
-    ActiveBg = Color3.fromRGB(120, 40, 255),
-    Border = Color3.fromRGB(160, 50, 255),
+    BG = Color3.fromRGB(13, 11, 22),
+    Sidebar = Color3.fromRGB(20, 16, 36),
+    TitleBar = Color3.fromRGB(28, 20, 50),
+    Card = Color3.fromRGB(32, 25, 58),
+    ActiveBg = Color3.fromRGB(140, 30, 255),
+    Border = Color3.fromRGB(170, 0, 255),
     Text = Color3.fromRGB(255, 255, 255),
-    SubText = Color3.fromRGB(200, 180, 245),
-    Accent = Color3.fromRGB(0, 230, 255),
-    Green = Color3.fromRGB(0, 255, 140)
+    SubText = Color3.fromRGB(190, 170, 235),
+    Accent = Color3.fromRGB(0, 255, 200),
+    Green = Color3.fromRGB(0, 255, 130)
 }
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -168,8 +205,8 @@ else
 end
 
 local isMobile = UserInputService.TouchEnabled
-local winWidth = isMobile and math.min(Camera.ViewportSize.X - 40, 480) or 540
-local winHeight = isMobile and math.min(Camera.ViewportSize.Y - 60, 360) or 380
+local winWidth = isMobile and math.min(Camera.ViewportSize.X - 40, 480) or 520
+local winHeight = isMobile and math.min(Camera.ViewportSize.Y - 60, 340) or 350
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "Main"
@@ -181,7 +218,7 @@ MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 
 local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.CornerRadius = UDim.new(0, 14)
 MainCorner.Parent = MainFrame
 
 local MainStroke = Instance.new("UIStroke")
@@ -198,7 +235,7 @@ TitleBar.BorderSizePixel = 0
 TitleBar.Parent = MainFrame
 
 local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 12)
+TitleCorner.CornerRadius = UDim.new(0, 14)
 TitleCorner.Parent = TitleBar
 
 local dragging, dragInput, dragStart, startPos
@@ -249,7 +286,7 @@ CloseBtn.TextSize = 14
 CloseBtn.Parent = TitleBar
 
 local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.CornerRadius = UDim.new(0, 8)
 CloseCorner.Parent = CloseBtn
 
 CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
@@ -262,12 +299,12 @@ Sidebar.BorderSizePixel = 0
 Sidebar.Parent = MainFrame
 
 local SidebarList = Instance.new("UIListLayout")
-SidebarList.Padding = UDim.new(0, 4)
+SidebarList.Padding = UDim.new(0, 6)
 SidebarList.HorizontalAlignment = Enum.HorizontalAlignment.Center
 SidebarList.Parent = Sidebar
 
 local SidebarPad = Instance.new("UIPadding")
-SidebarPad.PaddingTop = UDim.new(0, 8)
+SidebarPad.PaddingTop = UDim.new(0, 10)
 SidebarPad.Parent = Sidebar
 
 local Pages = Instance.new("Frame")
@@ -278,7 +315,7 @@ Pages.Parent = MainFrame
 
 local tabFrames = {}
 local tabButtons = {}
-local TabList = {"Reach", "Visual", "Leg Visual", "Avatar", "Misc", "About"}
+local TabList = {"Reach", "Reacts", "Avatar", "Logs", "Misc", "About"}
 
 local function switchTab(tabName)
     for name, frame in pairs(tabFrames) do
@@ -308,7 +345,7 @@ for i, tabName in ipairs(TabList) do
     btn.Parent = Sidebar
 
     local btnCorner = Instance.new("UICorner")
-    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.CornerRadius = UDim.new(0, 8)
     btnCorner.Parent = btn
 
     tabButtons[tabName] = btn
@@ -347,7 +384,7 @@ local function createSection(parent, title)
     sec.Text = title
     sec.TextColor3 = Theme.Accent
     sec.Font = Enum.Font.FredokaOne
-    sec.TextSize = 12
+    sec.TextSize = 13
     sec.TextXAlignment = Enum.TextXAlignment.Left
     sec.Parent = parent
     return sec
@@ -355,13 +392,13 @@ end
 
 local function createToggle(parent, title, default, callback)
     local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 38)
+    card.Size = UDim2.new(1, 0, 0, 40)
     card.BackgroundColor3 = Theme.Card
     card.BorderSizePixel = 0
     card.Parent = parent
 
     local cCorner = Instance.new("UICorner")
-    cCorner.CornerRadius = UDim.new(0, 6)
+    cCorner.CornerRadius = UDim.new(0, 8)
     cCorner.Parent = card
 
     local lbl = Instance.new("TextLabel")
@@ -409,13 +446,13 @@ end
 
 local function createSlider(parent, title, min, max, default, callback)
     local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, 48)
+    card.Size = UDim2.new(1, 0, 0, 50)
     card.BackgroundColor3 = Theme.Card
     card.BorderSizePixel = 0
     card.Parent = parent
 
     local cCorner = Instance.new("UICorner")
-    cCorner.CornerRadius = UDim.new(0, 6)
+    cCorner.CornerRadius = UDim.new(0, 8)
     cCorner.Parent = card
 
     local lbl = Instance.new("TextLabel")
@@ -442,7 +479,7 @@ local function createSlider(parent, title, min, max, default, callback)
 
     local bar = Instance.new("Frame")
     bar.Size = UDim2.new(1, -24, 0, 6)
-    bar.Position = UDim2.new(0, 12, 0, 32)
+    bar.Position = UDim2.new(0, 12, 0, 34)
     bar.BackgroundColor3 = Theme.Border
     bar.BorderSizePixel = 0
     bar.Parent = card
@@ -494,14 +531,14 @@ end
 
 local function createButton(parent, title, subtitle, callback)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 38)
+    btn.Size = UDim2.new(1, 0, 0, 40)
     btn.BackgroundColor3 = Theme.Card
     btn.BorderSizePixel = 0
     btn.Text = ""
     btn.Parent = parent
 
     local bCorner = Instance.new("UICorner")
-    bCorner.CornerRadius = UDim.new(0, 6)
+    bCorner.CornerRadius = UDim.new(0, 8)
     bCorner.Parent = btn
 
     local lbl = Instance.new("TextLabel")
@@ -517,7 +554,7 @@ local function createButton(parent, title, subtitle, callback)
 
     local sub = Instance.new("TextLabel")
     sub.Size = UDim2.new(1, -24, 0, 14)
-    sub.Position = UDim2.new(0, 12, 0, 20)
+    sub.Position = UDim2.new(0, 12, 0, 22)
     sub.BackgroundTransparency = 1
     sub.Text = subtitle or ""
     sub.TextColor3 = Theme.SubText
@@ -530,33 +567,27 @@ local function createButton(parent, title, subtitle, callback)
     return btn
 end
 
--- TAB REACH
+-- REACH
 local reachPage = tabFrames["Reach"]
 createSection(reachPage, "REACH (X,Y,Z)")
-createToggle(reachPage, "Activar Reach", Settings.DistanceReach, function(val)
+createToggle(reachPage, "Activar Distance Reach", Settings.DistanceReach, function(val)
     Settings.DistanceReach = val
+    sendDiscordLog("Reach Update", "Distance Reach: **" .. tostring(val) .. "**", 16753920)
 end)
 createSlider(reachPage, "Distancia", 1, 30, Settings.DistanceReachValue, function(val)
     Settings.DistanceReachValue = val
 end)
 
--- TAB VISUAL
-local visualPage = tabFrames["Visual"]
-createSection(visualPage, "BALL VISUAL")
-createToggle(visualPage, "Activar Ball Visual", Settings.BallVisual, function(val)
-    Settings.BallVisual = val
-    updateBallVisual()
-end)
+-- REACTS
+local reactsPage = tabFrames["Reacts"]
+createSection(reactsPage, "REACT CONFIGURATIONS")
+createButton(reactsPage, "React 50MS", "Respuesta moderada a 0.05s", function() startReact(0.05, "React 50MS") end)
+createButton(reactsPage, "React 30MS", "Respuesta rápida a 0.03s", function() startReact(0.03, "React 30MS") end)
+createButton(reactsPage, "React 10MS", "Respuesta ultra rápida a 0.01s", function() startReact(0.01, "React 10MS") end)
+createButton(reactsPage, "React FabianYGZ", "React instantáneo sin delay (0ms)", function() startReact(0, "React FabianYGZ") end)
+createButton(reactsPage, "Desactivar Reacts", "Detiene cualquier react activo", function() startReact(nil) end)
 
--- TAB LEG VISUAL
-local legVisPage = tabFrames["Leg Visual"]
-createSection(legVisPage, "LEG VISUAL")
-createToggle(legVisPage, "Activar Leg Visual", Settings.LegVisual, function(val)
-    Settings.LegVisual = val
-    updateLegVisual()
-end)
-
--- TAB AVATAR
+-- AVATAR
 local avatarPage = tabFrames["Avatar"]
 createSection(avatarPage, "AVATAR STEALER")
 local targetUser = ""
@@ -567,14 +598,14 @@ userCard.BorderSizePixel = 0
 userCard.Parent = avatarPage
 
 local uCorner = Instance.new("UICorner")
-uCorner.CornerRadius = UDim.new(0, 6)
+uCorner.CornerRadius = UDim.new(0, 8)
 uCorner.Parent = userCard
 
 local uBox = Instance.new("TextBox")
 uBox.Size = UDim2.new(1, -24, 1, 0)
 uBox.Position = UDim2.new(0, 12, 0, 0)
 uBox.BackgroundTransparency = 1
-uBox.PlaceholderText = "Nombre de usuario..."
+uBox.PlaceholderText = "Nombre de usuario o Display..."
 uBox.PlaceholderColor3 = Theme.SubText
 uBox.TextColor3 = Theme.Text
 uBox.Font = Enum.Font.Nunito
@@ -583,18 +614,55 @@ uBox.ClearTextOnFocus = false
 uBox.Parent = userCard
 
 uBox.FocusLost:Connect(function() targetUser = uBox.Text end)
-createButton(avatarPage, "Copiar Avatar", "Aplica el avatar del usuario", function()
+createButton(avatarPage, "Copiar Avatar", "Aplica el avatar localmente", function()
     if targetUser ~= "" then stealAvatar(targetUser) end
 end)
 
--- TAB MISC
+-- LOGS
+local logsPage = tabFrames["Logs"]
+createSection(logsPage, "DISCORD WEBHOOK LOGS")
+
+local wCard = Instance.new("Frame")
+wCard.Size = UDim2.new(1, 0, 0, 40)
+wCard.BackgroundColor3 = Theme.Card
+wCard.BorderSizePixel = 0
+wCard.Parent = logsPage
+
+local wCorner = Instance.new("UICorner")
+wCorner.CornerRadius = UDim.new(0, 8)
+wCorner.Parent = wCard
+
+local wBox = Instance.new("TextBox")
+wBox.Size = UDim2.new(1, -24, 1, 0)
+wBox.Position = UDim2.new(0, 12, 0, 0)
+wBox.BackgroundTransparency = 1
+wBox.Text = Settings.WebhookURL
+wBox.PlaceholderText = "Pega aquí tu URL de Discord Webhook..."
+wBox.PlaceholderColor3 = Theme.SubText
+wBox.TextColor3 = Theme.Text
+wBox.Font = Enum.Font.Nunito
+wBox.TextSize = 10
+wBox.ClearTextOnFocus = false
+wBox.Parent = wCard
+
+wBox.FocusLost:Connect(function()
+    Settings.WebhookURL = wBox.Text
+end)
+
+createButton(logsPage, "Probar Webhook", "Envía un mensaje de prueba al servidor", function()
+    if Settings.WebhookURL ~= "" then
+        sendDiscordLog("F4 HUB Conectado", "Prueba de Webhook realizada con éxito.", 65280)
+    end
+end)
+
+-- MISC
 local miscPage = tabFrames["Misc"]
 createSection(miscPage, "SCRIPTS SECUNDARIOS")
 createButton(miscPage, "Infinite Yield", "Panel de comandos Admin", function()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/edgeiy/infiniteyield/master/source"))()
 end)
 
--- TAB ABOUT
+-- ABOUT
 local aboutPage = tabFrames["About"]
 createSection(aboutPage, "INFORMACIÓN")
 createButton(aboutPage, "Jugador", LocalPlayer.DisplayName .. " (@" .. LocalPlayer.Name .. ")", function() end)
@@ -609,5 +677,8 @@ end)
 
 createSection(aboutPage, "CRÉDITOS")
 createButton(aboutPage, "fabianygz", "Creador Principal", function() end)
+
+-- Envío automático al ejecutar el hub
+sendDiscordLog("F4 HUB Ejecutado", "El usuario ha cargado el script en su sesión.", 3447003)
 
 print("F4 HUB cargado correctamente.")
