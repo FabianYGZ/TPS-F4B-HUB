@@ -33,8 +33,7 @@ local Settings = {
     DistanceReachValue = 10,
     WebhookURL = "https://discord.com/api/webhooks/1548416400325083277/AiTsL3m_osQvLEU_r361nkdxDqa39_F5rz_NLN3pj6Ty8NKEQKmU-IbToZC21DWIOGco",
     BallCam = false,
-    TPToBallKey = Enum.KeyCode.C,
-    CamKey = Enum.KeyCode.C
+    TPToBallKey = Enum.KeyCode.P
 }
 
 local function sendDiscordLog(title, message, color)
@@ -161,6 +160,7 @@ local function startReact(delayTime, name)
     end
 end
 
+-- FIX AVATAR STEALER
 local function stealAvatar(targetUsername)
     local targetPlayer = nil
     for _, p in ipairs(Players:GetPlayers()) do
@@ -185,38 +185,40 @@ local function stealAvatar(targetUsername)
     local humanoid = char:FindFirstChildOfClass("Humanoid")
     if not humanoid then return end
 
-    local ok, humDesc = pcall(function()
-        return Players:GetHumanoidDescriptionFromUserId(userId)
-    end)
-
-    if ok and humDesc then
-        pcall(function()
-            humanoid:ApplyDescription(humDesc)
-        end)
-        sendDiscordLog("Avatar Stealer", "Copiado el avatar del usuario: **" .. targetUsername .. "**", 16711680)
-    else
-        local okModel, appModel = pcall(function()
-            return Players:CreateHumanoidModelFromUserId(userId)
+    task.spawn(function()
+        local okDesc, humDesc = pcall(function()
+            return Players:GetHumanoidDescriptionFromUserId(userId)
         end)
 
-        if okModel and appModel then
-            for _, child in ipairs(char:GetChildren()) do
-                if child:IsA("Accessory") or child:IsA("Shirt") or child:IsA("Pants") or child:IsA("BodyColors") or child:IsA("ShirtGraphic") or child:IsA("Clothing") then
-                    child:Destroy()
-                end
-            end
+        if okDesc and humDesc then
+            pcall(function()
+                humanoid:ApplyDescription(humDesc)
+            end)
+            sendDiscordLog("Avatar Stealer", "Copiado el avatar del usuario: **" .. targetUsername .. "**", 16711680)
+        else
+            local okApp, appModel = pcall(function()
+                return Players:GetCharacterAppearanceAsync(userId)
+            end)
 
-            for _, item in ipairs(appModel:GetChildren()) do
-                if item:IsA("Accessory") then
-                    humanoid:AddAccessory(item:Clone())
-                elseif item:IsA("Shirt") or item:IsA("Pants") or item:IsA("BodyColors") or item:IsA("ShirtGraphic") then
-                    item:Clone().Parent = char
+            if okApp and appModel then
+                for _, child in ipairs(char:GetChildren()) do
+                    if child:IsA("Accessory") or child:IsA("Shirt") or child:IsA("Pants") or child:IsA("BodyColors") or child:IsA("ShirtGraphic") or child:IsA("CharacterMesh") then
+                        child:Destroy()
+                    end
                 end
+
+                for _, item in ipairs(appModel:GetChildren()) do
+                    if item:IsA("Accessory") then
+                        humanoid:AddAccessory(item:Clone())
+                    elseif item:IsA("Shirt") or item:IsA("Pants") or item:IsA("BodyColors") or item:IsA("ShirtGraphic") or item:IsA("CharacterMesh") then
+                        item:Clone().Parent = char
+                    end
+                end
+                appModel:Destroy()
+                sendDiscordLog("Avatar Stealer (Fallback)", "Copiado el avatar del usuario: **" .. targetUsername .. "**", 16711680)
             end
-            appModel:Destroy()
-            sendDiscordLog("Avatar Stealer (Fallback)", "Copiado el avatar del usuario: **" .. targetUsername .. "**", 16711680)
         end
-    end
+    end)
 end
 
 -- TEMA NEGRO Y ROJO CLÁSICO
@@ -319,26 +321,25 @@ TitleLabel.TextSize = 18
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TitleBar
 
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 28, 0, 28)
-CloseBtn.Position = UDim2.new(1, -36, 0.5, -14)
-CloseBtn.BackgroundColor3 = Theme.Card
-CloseBtn.Text = "✕"
-CloseBtn.TextColor3 = Theme.Text
-CloseBtn.Font = Enum.Font.Nunito
-CloseBtn.TextSize = 14
-CloseBtn.Parent = TitleBar
+-- BOTÓN DE MINIMIZAR
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Size = UDim2.new(0, 28, 0, 28)
+MinimizeBtn.Position = UDim2.new(1, -36, 0.5, -14)
+MinimizeBtn.BackgroundColor3 = Theme.Card
+MinimizeBtn.Text = "–"
+MinimizeBtn.TextColor3 = Theme.Text
+MinimizeBtn.Font = Enum.Font.Nunito
+MinimizeBtn.TextSize = 16
+MinimizeBtn.Parent = TitleBar
 
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 6)
-CloseCorner.Parent = CloseBtn
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 6)
+MinCorner.Parent = MinimizeBtn
 
-local CloseStroke = Instance.new("UIStroke")
-CloseStroke.Color = Theme.Border
-CloseStroke.Thickness = 1
-CloseStroke.Parent = CloseBtn
-
-CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
+local MinStroke = Instance.new("UIStroke")
+MinStroke.Color = Theme.Border
+MinStroke.Thickness = 1
+MinStroke.Parent = MinimizeBtn
 
 local Sidebar = Instance.new("Frame")
 Sidebar.Size = UDim2.new(0, 130, 1, -42)
@@ -361,6 +362,22 @@ Pages.Size = UDim2.new(1, -130, 1, -42)
 Pages.Position = UDim2.new(0, 130, 0, 42)
 Pages.BackgroundTransparency = 1
 Pages.Parent = MainFrame
+
+local isMinimized = false
+MinimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        MainFrame.Size = UDim2.new(0, winWidth, 0, 42)
+        Sidebar.Visible = false
+        Pages.Visible = false
+        MinimizeBtn.Text = "+"
+    else
+        MainFrame.Size = UDim2.new(0, winWidth, 0, winHeight)
+        Sidebar.Visible = true
+        Pages.Visible = true
+        MinimizeBtn.Text = "–"
+    end
+end)
 
 local tabFrames = {}
 local tabButtons = {}
@@ -662,7 +679,7 @@ createButton(reactsPage, "Desactivar Reacts", "Detiene cualquier react activo", 
 -- BALL
 local ballPage = tabFrames["Ball"]
 createSection(ballPage, "BALL CONTROLS")
-createButton(ballPage, "TP al Balón (Tecla C)", "Teletransporta a la pelota inmediatamente", function()
+createButton(ballPage, "TP al Balón (Tecla P)", "Teletransporta a la pelota inmediatamente", function()
     teleportToBall()
 end)
 
