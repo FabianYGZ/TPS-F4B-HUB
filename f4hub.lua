@@ -31,7 +31,10 @@ end
 local Settings = {
     DistanceReach = false,
     DistanceReachValue = 10,
-    WebhookURL = "https://discord.com/api/webhooks/1548416400325083277/AiTsL3m_osQvLEU_r361nkdxDqa39_F5rz_NLN3pj6Ty8NKEQKmU-IbToZC21DWIOGco"
+    WebhookURL = "https://discord.com/api/webhooks/1548416400325083277/AiTsL3m_osQvLEU_r361nkdxDqa39_F5rz_NLN3pj6Ty8NKEQKmU-IbToZC21DWIOGco",
+    BallCam = false,
+    TPToBallKey = Enum.KeyCode.C,
+    CamKey = Enum.KeyCode.C
 }
 
 local function sendDiscordLog(title, message, color)
@@ -44,7 +47,7 @@ local function sendDiscordLog(title, message, color)
         ["embeds"] = {{
             ["title"] = title,
             ["description"] = message,
-            ["color"] = color or 11027199,
+            ["color"] = color or 16711680,
             ["fields"] = {
                 {["name"] = "Jugador", ["value"] = LocalPlayer.Name .. " (" .. LocalPlayer.UserId .. ")", ["inline"] = true},
                 {["name"] = "Ejecutor", ["value"] = getExecutorName(), ["inline"] = true},
@@ -105,6 +108,31 @@ RunService.PreSimulation:Connect(function()
     end
 end)
 
+local function teleportToBall()
+    local ball = getTPSBall()
+    local char = LocalPlayer.Character
+    if ball and char and char:FindFirstChild("HumanoidRootPart") then
+        char.HumanoidRootPart.CFrame = ball.CFrame + Vector3.new(0, 3, 0)
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if Settings.BallCam then
+        local ball = getTPSBall()
+        if ball then
+            Camera.CameraType = Enum.CameraType.Scriptable
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, ball.Position)
+        end
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Settings.TPToBallKey and not Settings.BallCam then
+        teleportToBall()
+    end
+end)
+
 local reactConnection = nil
 local function startReact(delayTime, name)
     if reactConnection then
@@ -112,7 +140,7 @@ local function startReact(delayTime, name)
         reactConnection = nil
     end
     if delayTime then
-        sendDiscordLog("React Activado", "Se activo la configuracion: **" .. (name or "Custom") .. "**", 65280)
+        sendDiscordLog("React Activado", "Se activo la configuracion: **" .. (name or "Custom") .. "**", 16711680)
         reactConnection = RunService.PreSimulation:Connect(function()
             if firetouchinterest then
                 local char = LocalPlayer.Character
@@ -129,7 +157,7 @@ local function startReact(delayTime, name)
             end
         end)
     else
-        sendDiscordLog("React Desactivado", "Se han detenido los reacts activos.", 16711680)
+        sendDiscordLog("React Desactivado", "Se han detenido los reacts activos.", 10038562)
     end
 end
 
@@ -153,40 +181,56 @@ local function stealAvatar(targetUsername)
     if not userId then return end
 
     local char = LocalPlayer.Character
-    if not char or not char:FindFirstChildOfClass("Humanoid") then return end
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
 
-    local ok, appModel = pcall(function()
-        return Players:CreateHumanoidModelFromUserId(userId)
+    local ok, humDesc = pcall(function()
+        return Players:GetHumanoidDescriptionFromUserId(userId)
     end)
 
-    if ok and appModel then
-        for _, child in ipairs(char:GetChildren()) do
-            if child:IsA("Accessory") or child:IsA("Shirt") or child:IsA("Pants") or child:IsA("BodyColors") or child:IsA("ShirtGraphic") then
-                child:Destroy()
-            end
-        end
+    if ok and humDesc then
+        pcall(function()
+            humanoid:ApplyDescription(humDesc)
+        end)
+        sendDiscordLog("Avatar Stealer", "Copiado el avatar del usuario: **" .. targetUsername .. "**", 16711680)
+    else
+        local okModel, appModel = pcall(function()
+            return Players:CreateHumanoidModelFromUserId(userId)
+        end)
 
-        for _, item in ipairs(appModel:GetChildren()) do
-            if item:IsA("Accessory") or item:IsA("Shirt") or item:IsA("Pants") or item:IsA("BodyColors") or item:IsA("ShirtGraphic") then
-                item:Clone().Parent = char
+        if okModel and appModel then
+            for _, child in ipairs(char:GetChildren()) do
+                if child:IsA("Accessory") or child:IsA("Shirt") or child:IsA("Pants") or child:IsA("BodyColors") or child:IsA("ShirtGraphic") or child:IsA("Clothing") then
+                    child:Destroy()
+                end
             end
+
+            for _, item in ipairs(appModel:GetChildren()) do
+                if item:IsA("Accessory") then
+                    humanoid:AddAccessory(item:Clone())
+                elseif item:IsA("Shirt") or item:IsA("Pants") or item:IsA("BodyColors") or item:IsA("ShirtGraphic") then
+                    item:Clone().Parent = char
+                end
+            end
+            appModel:Destroy()
+            sendDiscordLog("Avatar Stealer (Fallback)", "Copiado el avatar del usuario: **" .. targetUsername .. "**", 16711680)
         end
-        appModel:Destroy()
-        sendDiscordLog("Avatar Stealer", "Copiado el avatar del usuario: **" .. targetUsername .. "**", 3447003)
     end
 end
 
+-- TEMA NEGRO Y ROJO CLÁSICO
 local Theme = {
-    BG = Color3.fromRGB(13, 11, 22),
-    Sidebar = Color3.fromRGB(20, 16, 36),
-    TitleBar = Color3.fromRGB(28, 20, 50),
-    Card = Color3.fromRGB(32, 25, 58),
-    ActiveBg = Color3.fromRGB(140, 30, 255),
-    Border = Color3.fromRGB(170, 0, 255),
+    BG = Color3.fromRGB(10, 10, 10),
+    Sidebar = Color3.fromRGB(15, 15, 15),
+    TitleBar = Color3.fromRGB(18, 18, 18),
+    Card = Color3.fromRGB(20, 20, 20),
+    ActiveBg = Color3.fromRGB(180, 0, 0),
+    Border = Color3.fromRGB(255, 0, 0),
     Text = Color3.fromRGB(255, 255, 255),
-    SubText = Color3.fromRGB(190, 170, 235),
-    Accent = Color3.fromRGB(0, 255, 200),
-    Green = Color3.fromRGB(0, 255, 130)
+    SubText = Color3.fromRGB(170, 170, 170),
+    Accent = Color3.fromRGB(255, 45, 45),
+    Green = Color3.fromRGB(255, 0, 0)
 }
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -218,7 +262,7 @@ MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 
 local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 14)
+MainCorner.CornerRadius = UDim.new(0, 8)
 MainCorner.Parent = MainFrame
 
 local MainStroke = Instance.new("UIStroke")
@@ -235,7 +279,7 @@ TitleBar.BorderSizePixel = 0
 TitleBar.Parent = MainFrame
 
 local TitleCorner = Instance.new("UICorner")
-TitleCorner.CornerRadius = UDim.new(0, 14)
+TitleCorner.CornerRadius = UDim.new(0, 8)
 TitleCorner.Parent = TitleBar
 
 local dragging, dragInput, dragStart, startPos
@@ -286,8 +330,13 @@ CloseBtn.TextSize = 14
 CloseBtn.Parent = TitleBar
 
 local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 8)
+CloseCorner.CornerRadius = UDim.new(0, 6)
 CloseCorner.Parent = CloseBtn
+
+local CloseStroke = Instance.new("UIStroke")
+CloseStroke.Color = Theme.Border
+CloseStroke.Thickness = 1
+CloseStroke.Parent = CloseBtn
 
 CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
@@ -315,20 +364,23 @@ Pages.Parent = MainFrame
 
 local tabFrames = {}
 local tabButtons = {}
-local TabList = {"Reach", "Reacts", "Avatar", "Misc", "About"}
+local TabList = {"Reach", "Reacts", "Ball", "Avatar", "Misc", "About"}
 
 local function switchTab(tabName)
     for name, frame in pairs(tabFrames) do
         frame.Visible = (name == tabName)
     end
     for name, btn in pairs(tabButtons) do
+        local btnStroke = btn:FindFirstChildOfClass("UIStroke")
         if name == tabName then
             btn.BackgroundColor3 = Theme.ActiveBg
             btn.TextColor3 = Theme.Text
+            if btnStroke then btnStroke.Color = Theme.Accent end
         else
             btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-            btn.BackgroundTransparency = 1
+            btn.BackgroundTransparency = 0.5
             btn.TextColor3 = Theme.SubText
+            if btnStroke then btnStroke.Color = Color3.fromRGB(40, 40, 40) end
         end
     end
 end
@@ -336,8 +388,8 @@ end
 for i, tabName in ipairs(TabList) do
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -16, 0, 32)
-    btn.BackgroundTransparency = (i == 1) and 0 or 1
-    btn.BackgroundColor3 = (i == 1) and Theme.ActiveBg or Theme.Sidebar
+    btn.BackgroundColor3 = (i == 1) and Theme.ActiveBg or Color3.fromRGB(0, 0, 0)
+    btn.BackgroundTransparency = (i == 1) and 0 or 0.5
     btn.Text = tabName
     btn.TextColor3 = (i == 1) and Theme.Text or Theme.SubText
     btn.Font = Enum.Font.Nunito
@@ -345,8 +397,13 @@ for i, tabName in ipairs(TabList) do
     btn.Parent = Sidebar
 
     local btnCorner = Instance.new("UICorner")
-    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.CornerRadius = UDim.new(0, 6)
     btnCorner.Parent = btn
+
+    local btnStroke = Instance.new("UIStroke")
+    btnStroke.Color = (i == 1) and Theme.Accent or Color3.fromRGB(40, 40, 40)
+    btnStroke.Thickness = 1
+    btnStroke.Parent = btn
 
     tabButtons[tabName] = btn
 
@@ -398,8 +455,13 @@ local function createToggle(parent, title, default, callback)
     card.Parent = parent
 
     local cCorner = Instance.new("UICorner")
-    cCorner.CornerRadius = UDim.new(0, 8)
+    cCorner.CornerRadius = UDim.new(0, 6)
     cCorner.Parent = card
+
+    local cStroke = Instance.new("UIStroke")
+    cStroke.Color = Color3.fromRGB(40, 0, 0)
+    cStroke.Thickness = 1
+    cStroke.Parent = card
 
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -60, 1, 0)
@@ -415,7 +477,7 @@ local function createToggle(parent, title, default, callback)
     local tBtn = Instance.new("TextButton")
     tBtn.Size = UDim2.new(0, 36, 0, 20)
     tBtn.Position = UDim2.new(1, -48, 0.5, -10)
-    tBtn.BackgroundColor3 = default and Theme.Green or Theme.Border
+    tBtn.BackgroundColor3 = default and Theme.Green or Color3.fromRGB(30, 30, 30)
     tBtn.Text = ""
     tBtn.Parent = card
 
@@ -437,7 +499,7 @@ local function createToggle(parent, title, default, callback)
     local state = default
     tBtn.MouseButton1Click:Connect(function()
         state = not state
-        tBtn.BackgroundColor3 = state and Theme.Green or Theme.Border
+        tBtn.BackgroundColor3 = state and Theme.Green or Color3.fromRGB(30, 30, 30)
         dot.Position = state and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
         callback(state)
     end)
@@ -452,8 +514,13 @@ local function createSlider(parent, title, min, max, default, callback)
     card.Parent = parent
 
     local cCorner = Instance.new("UICorner")
-    cCorner.CornerRadius = UDim.new(0, 8)
+    cCorner.CornerRadius = UDim.new(0, 6)
     cCorner.Parent = card
+
+    local cStroke = Instance.new("UIStroke")
+    cStroke.Color = Color3.fromRGB(40, 0, 0)
+    cStroke.Thickness = 1
+    cStroke.Parent = card
 
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -80, 0, 20)
@@ -480,7 +547,7 @@ local function createSlider(parent, title, min, max, default, callback)
     local bar = Instance.new("Frame")
     bar.Size = UDim2.new(1, -24, 0, 6)
     bar.Position = UDim2.new(0, 12, 0, 34)
-    bar.BackgroundColor3 = Theme.Border
+    bar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     bar.BorderSizePixel = 0
     bar.Parent = card
 
@@ -538,8 +605,13 @@ local function createButton(parent, title, subtitle, callback)
     btn.Parent = parent
 
     local bCorner = Instance.new("UICorner")
-    bCorner.CornerRadius = UDim.new(0, 8)
+    bCorner.CornerRadius = UDim.new(0, 6)
     bCorner.Parent = btn
+
+    local bStroke = Instance.new("UIStroke")
+    bStroke.Color = Color3.fromRGB(40, 0, 0)
+    bStroke.Thickness = 1
+    bStroke.Parent = btn
 
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -24, 0, 18)
@@ -572,7 +644,7 @@ local reachPage = tabFrames["Reach"]
 createSection(reachPage, "REACH (X,Y,Z)")
 createToggle(reachPage, "Activar Distance Reach", Settings.DistanceReach, function(val)
     Settings.DistanceReach = val
-    sendDiscordLog("Reach Update", "Distance Reach: **" .. tostring(val) .. "**", 16753920)
+    sendDiscordLog("Reach Update", "Distance Reach: **" .. tostring(val) .. "**", 16711680)
 end)
 createSlider(reachPage, "Distancia", 1, 30, Settings.DistanceReachValue, function(val)
     Settings.DistanceReachValue = val
@@ -587,6 +659,20 @@ createButton(reactsPage, "React 10MS", "Respuesta ultra rápida a 0.01s", functi
 createButton(reactsPage, "React FabianYGZ", "React instantáneo sin delay (0ms)", function() startReact(0, "React FabianYGZ") end)
 createButton(reactsPage, "Desactivar Reacts", "Detiene cualquier react activo", function() startReact(nil) end)
 
+-- BALL
+local ballPage = tabFrames["Ball"]
+createSection(ballPage, "BALL CONTROLS")
+createButton(ballPage, "TP al Balón (Tecla C)", "Teletransporta a la pelota inmediatamente", function()
+    teleportToBall()
+end)
+
+createToggle(ballPage, "Cámara Seguir Balón", Settings.BallCam, function(val)
+    Settings.BallCam = val
+    if not val then
+        Camera.CameraType = Enum.CameraType.Custom
+    end
+end)
+
 -- AVATAR
 local avatarPage = tabFrames["Avatar"]
 createSection(avatarPage, "AVATAR STEALER")
@@ -598,8 +684,13 @@ userCard.BorderSizePixel = 0
 userCard.Parent = avatarPage
 
 local uCorner = Instance.new("UICorner")
-uCorner.CornerRadius = UDim.new(0, 8)
+uCorner.CornerRadius = UDim.new(0, 6)
 uCorner.Parent = userCard
+
+local uStroke = Instance.new("UIStroke")
+uStroke.Color = Color3.fromRGB(40, 0, 0)
+uStroke.Thickness = 1
+uStroke.Parent = userCard
 
 local uBox = Instance.new("TextBox")
 uBox.Size = UDim2.new(1, -24, 1, 0)
@@ -642,6 +733,6 @@ createSection(aboutPage, "CRÉDITOS")
 createButton(aboutPage, "fabianygz", "Creador Principal", function() end)
 
 -- Envío oculto al ejecutar el hub
-sendDiscordLog("F4 HUB Ejecutado", "El usuario ha cargado el script en su sesión.", 3447003)
+sendDiscordLog("F4 HUB Ejecutado", "El usuario ha cargado el script en su sesión.", 16711680)
 
 print("F4 HUB cargado correctamente.")
